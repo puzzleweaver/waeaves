@@ -17,6 +17,7 @@ services:
     restart: unless-stopped
     ports:
       - "80:80"
+      - "443:443"
       - '10000:10000'
     volumes:
       - wordpress:/var/www/html
@@ -33,7 +34,7 @@ services:
     volumes:
       - certbot-etc:/etc/letsencrypt
       - wordpress:/var/www/html
-    command: certonly --webroot --webroot-path=/var/www/html --email emma.e.weaver1@gmail.com --agree-tos --no-eff-email --staging -d your_domain -d www.waeaves.com
+    command: certonly --webroot --webroot-path=/var/www/html --email emma.e.weaver1@gmail.com --agree-tos --no-eff-email --staging -d waeaves.com -d www.waeaves.com
 
   wordpress:
     depends_on:
