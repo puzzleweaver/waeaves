@@ -1,0 +1,12 @@
+waeaves.com www.waeaves.com {
+	root * /var/www/html
+
+	php_fastcgi wordpress:9000 {
+		split .php
+		index index.php
+		# env SCRIPT_FILENAME {document_root}{path}
+		# env PATH_INFO {path}
+	}
+
+	file_server
+}
