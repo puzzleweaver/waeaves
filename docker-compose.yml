@@ -1,70 +1,85 @@
 
 services:
-  # # webmin-only container, TODO eventually merge into webserver container
-  # webmin:
-  #   container_name: webmin 
-  #   restart: unless-stopped
-  #   build: ./webmin
-  #   # image: webmin:v1
-  #   ports:
-  #    - '10000:10000'
-  #   tty: true
-
-  # # shitty nginx webserver description, from wordpress tutorial
-  # webserver:
-  #   depends_on:
-  #     - wordpress
-  #   build: ./caddy
-  #   container_name: webserver
-  #   restart: unless-stopped
-  #   ports:
-  #     - "80:80" # http
-  #     - "443:443" # https
-  #     - '10000:10000' # webmin (TODO add later)
-  #   volumes:
-  #     - wordpress:/var/www/html # wordpress site contents
-  #     - ./caddy/conf:/conf # caddy configuration files
-  #   networks:
-  #     - app-network
-
-
-  db:
-    image: mysql:8.0
-    container_name: db
-    restart: unless-stopped
-    env_file: .env
-    environment:
-      - MYSQL_DATABASE=wordpress
-      - MYSQL_USER=$MYSQL_USER
-      - MYSQL_PASSWORD=$MYSQL_PASSWORD
-      - MYSQL_ROOT_PASSWORD=$MYSQL_ROOT_PASSWORD
-      - MYSQL_DEFAULT_AUTHENTICATION_PLUGIN=caching_sha2_password
+  database:
+    image: postgis/postgis:13-master
+    container_name: database
+    # Required when running on platform other than amd64, like Apple M1/M2:
+    # platform: linux/amd64
     volumes:
-      - dbdata:/var/lib/mysql
+      - ./postgis/database:/var/lib/postgresql/data
+    secrets:
+      - db_password
+    environment:
+      POSTGRES_DB: $DB_NAME
+      POSTGRES_USER: $DB_USER
+      POSTGRES_PASSWORD: /run/secrets/db_password
+    healthcheck:
+      test: ["CMD", "pg_isready", "--host=database", "--username=$DB_USER"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_interval: 5s
+      start_period: 30s
     networks:
       - app-network
 
-  wordpress:
-    depends_on:
-      - db
-    image: wordpress:php8.2-fpm-alpine
-    container_name: wordpress
-    restart: unless-stopped
-    env_file: .env
-    environment:
-      - WORDPRESS_DB_SSL=true
-      - WORDPRESS_DB_HOST=db:3306
-      - WORDPRESS_DB_NAME=wordpress
-      - WORDPRESS_DB_USER=$MYSQL_USER
-      - WORDPRESS_DB_PASSWORD=$MYSQL_PASSWORD
+  cache:
+    image: redis:6
+    container_name: cache
+    healthcheck:
+      test: ["CMD-SHELL", "[ $$(redis-cli ping) = 'PONG' ]"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_interval: 5s
+      start_period: 30s
+    networks:
+      - app-network
+
+  directus:
+    image: directus/directus:11.9.2
+    ports:
+      - 8055:8055
+    container_name: directus
     volumes:
-      - wordpress:/var/www/html
+      - ./directus/uploads:/directus/uploads
+      - ./directus/extensions:/directus/extensions
+    depends_on:
+      database:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+    secrets:
+      - db_password
+      - directus_secret
+      - directus_password
+    environment:
+      SECRET: /run/secrets/directus_secret
+      ADMIN_EMAIL: emma.e.weaver1@gmail.com
+      ADMIN_PASSWORD_FILE: /run/secrets/directus_password
+
+      PUBLIC_URL: http://waeaves.com/dev/
+      HOST: directus
+      PORT: 8055
+
+      DB_CLIENT: pg
+      DB_HOST: database
+      DB_PORT: 5432
+      DB_DATABASE: $DB_NAME
+      DB_USER: $DB_USER
+      DB_PASSWORD: /run/secrets/db_password
+
+      CACHE_ENABLED: true
+      CACHE_AUTO_PURGE: true
+      CACHE_STORE: redis
+      REDIS: redis://cache:6379
     networks:
       - app-network
 
   webserver:
     depends_on:
-      - wordpress
+      - directus
+    container_name: webserver
     image: caddy:latest
     restart: unless-stopped
     ports:
@@ -73,18 +88,22 @@ services:
       - "443:443/udp"
     volumes:
       - ./caddy/conf:/etc/caddy
-      - wordpress:/var/www/html # wordpress site contents
       - caddy_data:/data
       - caddy_config:/config
     networks:
       - app-network
 
 volumes:
-  certbot-etc:
-  wordpress:
-  dbdata:
   caddy_data:
   caddy_config:
+
+secrets:
+  db_password:
+    file: ./secrets/db_password
+  directus_password:
+    file: ./secrets/directus_password
+  directus_secret:
+    file: ./secrets/directus_secret
 
 networks:
   app-network:

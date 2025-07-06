@@ -1,0 +1,95 @@
+
+services:
+  database:
+    image: mysql:8.0
+    container_name: database
+    restart: unless-stopped
+    environment:
+      MYSQL_DEFAULT_AUTHENTICATION_PLUGIN: caching_sha2_password
+      MYSQL_HOST: database:3306
+      MYSQL_DATABASE: $MYSQL_DATABASE
+      MYSQL_USER: $MYSQL_USER
+      MYSQL_PASSWORD: /run/secrets/mysql_password
+      MYSQL_ROOT_PASSWORD: /run/secrets/mysql_root_password
+    secrets:
+      - mysql_password
+      - mysql_root_password
+    volumes:
+      - dbdata:/var/lib/mysql
+    networks:
+      - app-network
+
+  wordpress:
+    depends_on:
+      - database
+    container_name: wordpress
+    image: wordpress:php8.2-fpm-alpine
+    restart: unless-stopped
+    secrets:
+      - mysql_password
+    environment:
+      WORDPRESS_DB_SSL: true
+      WORDPRESS_DB_HOST: database:3306
+      WORDPRESS_DB_NAME: $MYSQL_DATABASE 
+      WORDPRESS_DB_USER: $MYSQL_USER
+      WORDPRESS_DB_PASSWORD: /run/secrets/mysql_password
+    volumes:
+      - wordpress:/var/www/html
+    networks:
+      - app-network
+
+  webserver:
+    depends_on:
+      - wordpress
+    container_name: webserver
+    image: caddy:latest
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./caddy/conf:/etc/caddy
+      - wordpress:/var/www/html # wordpress site contents
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - app-network
+
+  webmin:
+    depends_on:
+      - wordpress
+    container_name: webmin
+    restart: unless-stopped
+    build: 
+      context: "./webmin"
+      secrets:
+        - webmin_password
+    volumes:
+      - wordpress:/var/www/html
+    ports:
+      - '10000:10000'
+    tty: true
+
+volumes:
+  certbot-etc:
+  wordpress:
+  dbdata:
+  caddy_data:
+  caddy_config:
+
+networks:
+  app-network:
+    driver: bridge
+
+secrets:
+  mysql_database:
+    file: ./secrets/mysql_database
+  mysql_root_password:
+    file: ./secrets/mysql_root_password
+  mysql_password:
+    file: ./secrets/mysql_password
+
+  webmin_password:
+    file: ./secrets/webmin_password
+  

@@ -1,16 +1,13 @@
 
 FROM ubuntu:latest
 
-# Set environment variables for Webmin installation
-ENV DEBIAN_FRONTEND=noninteractive
-
 # Metadata as described above
-LABEL maintainer="your_email@example.com" \
-    version="1.1" \
-    description="Dockerfile for running Webmin 1.920 on Ubuntu"
+LABEL maintainer="emma.e.weaver1@gmail.com" \
+    version="1.2" \
+    description="Dockerfile for running Webmin on Ubuntu"
 
-# TODO fix this lmao
-RUN echo "root:root" | chpasswd
+RUN --mount=type=secret,id=webmin_password,env=WEBMIN_PASSWORD \
+    echo "root:$WEBMIN_PASSWORD" | chpasswd
 
 # Install basic dependencies with apt-get
 RUN apt-get -y update && \

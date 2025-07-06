@@ -1,12 +1,14 @@
 waeaves.com www.waeaves.com {
-	root * /var/www/html
-
-	php_fastcgi wordpress:9000 {
-		split .php
-		index index.php
-		# env SCRIPT_FILENAME {document_root}{path}
-		# env PATH_INFO {path}
+	handle_path /dev* {
+		rewrite * {path}
+		reverse_proxy directus:8055
 	}
 
-	file_server
+	# Other routes or static file serving
+	handle {
+		# reverse_proxy http://puzzleweaver.github.io
+		# root * /var/www/html
+		# file_server
+		respond "Hello, world!"
+	}
 }
